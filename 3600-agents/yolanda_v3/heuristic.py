@@ -2,7 +2,7 @@ import numpy as np
 from .move_gen import carpet_rolls
 
 # WEIGHTS = {'sd': 1.0, 'rev': 0.1, 'rr': 1.5, 'cp': 0.3, 'pq': 0.1}
-WEIGHTS = {'sd': 1.0, 'rev': 0.5, 'rr': 1.2, 'cp': 0.8, 'pq': 0.3}
+WEIGHTS = {'sd': 1.0, 'rr': 1.2, 'cp': 0.8, 'pq': 0.3}
 CARPET_SCORE = {1: -1, 2: 2, 3: 4, 4: 6, 5: 10, 6: 15, 7: 21}
 
 def compute_cell_potential(blocked_mask):
@@ -38,21 +38,20 @@ def evaluate(board, belief, cell_potential, is_max=True, w=None):
     turns_left = board.player_worker.turns_left
 
     if turns_left <= 8:
-        w['rev'] = min(w['rev'] * (1.0 + (8 - turns_left) * 0.15), 1.2)
+        # w['rev'] = min(w['rev'] * (1.0 + (8 - turns_left) * 0.15), 1.2)
         w['cp']  = w['cp'] * 0.5
 
     sd = board.player_worker.get_points() - board.opponent_worker.get_points()
 
-    p = belief.belief.max()
-    rev = 4.0 * p - 2.0 * (1.0 - p)
+    # p = belief.belief.max()
+    # rev = 4.0 * p - 2.0 * (1.0 - p)
 
     rolls = carpet_rolls(board)
     rr = max((CARPET_SCORE.get(r.roll_length, 0) for r in rolls), default=0)
 
     cp = reachable_potential(board.player_worker.position, cell_potential, turns_left)
-
     i = board.player_worker.position[1]*8 + board.player_worker.position[0]
     pq = cell_potential[i]
 
-    val = w['sd']*sd + w['rev']*rev + w['rr']*rr + w['cp']*cp + w['pq']*pq
+    val = w['sd']*sd + w['rr']*rr + w['cp']*cp + w['pq']*pq
     return val if is_max else -val

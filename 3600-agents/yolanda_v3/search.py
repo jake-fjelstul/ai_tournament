@@ -59,6 +59,9 @@ def minimax(board, belief, cell_potential, depth, alpha, beta, is_max, deadline)
             new_belief.predict()
             
             eval_val, _ = minimax(child, new_belief, cell_potential, depth - 1, alpha, beta, False, deadline)
+            if move.move_type.name == 'SEARCH':
+                eval_val += belief.search_ev()
+            
             if eval_val > max_eval:
                 max_eval = eval_val
                 best_move = move
@@ -77,6 +80,9 @@ def minimax(board, belief, cell_potential, depth, alpha, beta, is_max, deadline)
             new_belief.predict()
             
             eval_val, _ = minimax(child, new_belief, cell_potential, depth - 1, alpha, beta, True, deadline)
+            if move.move_type.name == 'SEARCH':
+                eval_val -= belief.search_ev()
+                
             if eval_val < min_eval:
                 min_eval = eval_val
                 best_move = move
