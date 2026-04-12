@@ -2,39 +2,84 @@ from collections.abc import Callable
 from typing import List, Set, Tuple
 import random
 
-from game import board, move, enums
+#from game import board, move, enums
 
+try:
+    # Autograder Environment
+    from game.board import Board
+    from game.move import Move
+except ImportError:
+    # Local Testing Environment
+    from engine.game.board import Board
+    from engine.game.move import Move
+
+from .move_gen import all_legal_moves, carpet_rolls, prime_steps, plain_steps
+from .rat_belief import RatBelief
+from .search import SearchEngine
+from .heuristic import compute_cell_potential
 
 class PlayerAgent:
-    """
-    /you may add and modify functions, however, __init__, commentate and play are the entry points for
-    your program and should not be changed.
-    """
+    def __init__(self, board, transition_matrix, time_left_func):
+        """Called once when the game starts."""
+        self.T = transition_matrix
+        self.time_left_func = time_left_func
+        self.belief = RatBelief(self.T)
+        self.belief.initialize()
+        self.search = SearchEngine()
+        self.cell_potential = compute_cell_potential(board._blocked_mask)
 
-    def __init__(self, board, transition_matrix=None, time_left: Callable = None):
-
-        """
-        TODO: Your initialization code below. Should be used to do any setup you want
-        before the game begins (i.e. calculating priors.)
-        """
-        pass
-        
+    
+    def play(self, board: 'Board', sensor_data: Tuple, time_left: Callable):
+        try:
+            # Update the time_left function reference
+            self.time_left_func = time_left
+            
+            if sensor_data is not None:
+                noise, dist = sensor_data
+                self.belief.predict()
+                self.belief.update_noise(noise, board)
+                self.belief.update_distance(dist, board.player_worker.position)
+                self.belief.update_opponent_search(board.opponent_search)
+                
+            turns_left = board.player_worker.turns_left
+            current_time_left = self.time_left_func()
+            
+            budget = (current_time_left / max(1, turns_left)) * 0.80 
+            if turns_left > 30: budget = min(budget, 2.5)
+            elif turns_left > 10: budget = min(budget, 10.0)
+            else: budget = min(budget, 4.0)
+            
+            return self.search.run(board, self.belief, budget, self.cell_potential)
+            
+        except Exception as e:
+            print(f"CRITICAL ERROR in play(): {e}")
+            from .agent import greedy_move
+            return greedy_move(board, self.belief)
+    
     def commentate(self):
-        """
-        Optional: You can use this function to print out any commentary you want at the end of the game.
-        """
-        return ""
+        """Called by the engine at the end of the game."""
+        return "Good game!"
 
-    def play(
-        self,
-        board: board.Board,
-        sensor_data: Tuple,
-        time_left: Callable,
-    ):
-        """
-        TODO: Below is random mover code. Replace it with your own.
-        You may do so however you like, including adding extra functions,
-        variables. Return a valid move from this function.
-        """
-        moves = board.get_valid_moves()
-        return random.choice(moves)
+def greedy_move(board: Board, belief: RatBelief = None) -> Move:
+    moves = all_legal_moves(board, belief)
+    if not moves:
+        return Move.search((0, 0))
+
+    carps = carpet_rolls(board)
+    if carps:
+        best_carpet = max(carps, key=lambda m: m.roll_length)
+        return best_carpet
+        
+    if belief is not None and belief.search_ev() > 0.5:
+        bx, by = belief.best_search_target()
+        return Move.search((bx, by))
+        
+    primes = prime_steps(board)
+    if primes:
+        return random.choice(primes)
+        
+    plains = plain_steps(board)
+    if plains:
+        return random.choice(plains)
+        
+    return moves[0]
